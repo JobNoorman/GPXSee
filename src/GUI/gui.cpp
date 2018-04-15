@@ -13,7 +13,7 @@
 #include <QSignalMapper>
 #include <QMenu>
 #include <QToolBar>
-#include <QTabWidget>
+#include <QDockWidget>
 #include <QActionGroup>
 #include <QAction>
 #include <QLabel>
@@ -49,7 +49,7 @@ GUI::GUI()
 	loadPOIs();
 
 	createMapView();
-	createGraphTabs();
+	createGraphs();
 	createStatusBar();
 	createActions();
 	createMenus();
@@ -57,15 +57,7 @@ GUI::GUI()
 
 	createBrowser();
 
-	QSplitter *splitter = new QSplitter();
-	splitter->setOrientation(Qt::Vertical);
-	splitter->setChildrenCollapsible(false);
-	splitter->addWidget(_mapView);
-	splitter->addWidget(_graphTabWidget);
-	splitter->setContentsMargins(0, 0, 0, 0);
-	splitter->setStretchFactor(0, 255);
-	splitter->setStretchFactor(1, 1);
-	setCentralWidget(splitter);
+	setCentralWidget(_mapView);
 
 	setWindowIcon(QIcon(QPixmap(APP_ICON)));
 	setWindowTitle(APP_NAME);
@@ -80,25 +72,19 @@ GUI::GUI()
 	_time = 0;
 	_movingTime = 0;
 
-	_sliderPos = 0;
-
 	_dataDir = QDir::homePath();
 	_mapDir = QDir::homePath();
 	_poiDir = QDir::homePath();
 
 	readSettings();
 
-	updateGraphTabs();
+	updateGraphs();
 	updateMapView();
 	updateStatusBarInfo();
 }
 
 GUI::~GUI()
 {
-	for (int i = 0; i < _tabs.size(); i++) {
-		if (_graphTabWidget->indexOf(_tabs.at(i)) < 0)
-			delete _tabs.at(i);
-	}
 }
 
 void GUI::loadMaps()
@@ -541,29 +527,26 @@ void GUI::createMapView()
 #endif // Q_OS_WIN32
 }
 
-void GUI::createGraphTabs()
+void GUI::createGraphs()
 {
-	_graphTabWidget = new QTabWidget();
-	connect(_graphTabWidget, SIGNAL(currentChanged(int)), this,
-	  SLOT(graphChanged(int)));
+	createGraph(new ElevationGraph);
+	createGraph(new SpeedGraph);
+	createGraph(new HeartRateGraph);
+	createGraph(new CadenceGraph);
+	createGraph(new PowerGraph);
+	createGraph(new TemperatureGraph);
+}
 
-	_graphTabWidget->setSizePolicy(QSizePolicy(QSizePolicy::Ignored,
-	  QSizePolicy::Preferred));
-	_graphTabWidget->setMinimumHeight(200);
-#ifdef Q_OS_WIN32
-	_graphTabWidget->setDocumentMode(true);
-#endif // Q_OS_WIN32
+void GUI::createGraph(GraphTab *graphTab)
+{
+	_tabs.append(graphTab);
+	connect(graphTab, SIGNAL(sliderPositionChanged(qreal)),
+	        this, SLOT(sliderPositionChanged(qreal)));
 
-	_tabs.append(new ElevationGraph);
-	_tabs.append(new SpeedGraph);
-	_tabs.append(new HeartRateGraph);
-	_tabs.append(new CadenceGraph);
-	_tabs.append(new PowerGraph);
-	_tabs.append(new TemperatureGraph);
-
-	for (int i = 0; i < _tabs.count(); i++)
-		connect(_tabs.at(i), SIGNAL(sliderPositionChanged(qreal)), this,
-		  SLOT(sliderPositionChanged(qreal)));
+	auto dockWidget = new QDockWidget(graphTab->label(), this);
+	dockWidget->setWidget(graphTab);
+	addDockWidget(Qt::RightDockWidgetArea, dockWidget);
+	_graphDockWidgets[graphTab] = dockWidget;
 }
 
 void GUI::createStatusBar()
@@ -687,7 +670,7 @@ bool GUI::openFile(const QString &fileName)
 		updateNavigationActions();
 		updateStatusBarInfo();
 		updateWindowTitle();
-		updateGraphTabs();
+		updateGraphs();
 		updateMapView();
 
 		return true;
@@ -740,7 +723,7 @@ bool GUI::loadFile(const QString &fileName)
 		updateNavigationActions();
 		updateStatusBarInfo();
 		updateWindowTitle();
-		updateGraphTabs();
+		updateGraphs();
 		updateMapView();
 
 		QString error = tr("Error loading data file:") + "\n\n"
@@ -944,21 +927,14 @@ void GUI::plot(QPrinter *printer)
 		mh = ih / 2;
 		info.plot(&p, QRectF(0, 0, printer->width(), ih), ratio);
 	}
-	if (_graphTabWidget->isVisible() && !_options.separateGraphPage) {
-		qreal r = (((qreal)(printer)->width()) / (qreal)(printer->height()));
-		gh = (printer->width() > printer->height())
-		  ? 0.15 * r * (printer->height() - ih - 2*mh)
-		  : 0.15 * (printer->height() - ih - 2*mh);
-		GraphTab *gt = static_cast<GraphTab*>(_graphTabWidget->currentWidget());
-		gt->plot(&p,  QRectF(0, printer->height() - gh, printer->width(), gh),
-		  ratio);
-	} else
-		gh = 0;
+	gh = 0;
 	_mapView->plot(&p, QRectF(0, ih + mh, printer->width(), printer->height()
 	  - (ih + 2*mh + gh)), ratio, _options.hiresPrint);
 
-	if (_graphTabWidget->isVisible() && _options.separateGraphPage) {
-		printer->newPage();
+	if (_showGraphsAction->isChecked()) {
+		if (_options.separateGraphPage) {
+			printer->newPage();
+		}
 
 		int cnt = 0;
 		for (int i = 0; i < _tabs.size(); i++)
@@ -996,8 +972,6 @@ void GUI::reloadFile()
 		_tabs.at(i)->clear();
 	_mapView->clear();
 
-	_sliderPos = 0;
-
 	for (int i = 0; i < _files.size(); i++) {
 		if (!loadFile(_files.at(i))) {
 			_files.removeAt(i);
@@ -1007,7 +981,7 @@ void GUI::reloadFile()
 
 	updateStatusBarInfo();
 	updateWindowTitle();
-	updateGraphTabs();
+	updateGraphs();
 	updateMapView();
 	if (_files.isEmpty())
 		_fileActionGroup->setEnabled(false);
@@ -1027,8 +1001,6 @@ void GUI::closeFiles()
 	_dateRange = DateRange(QDate(), QDate());
 	_pathName = QString();
 
-	_sliderPos = 0;
-
 	for (int i = 0; i < _tabs.count(); i++)
 		_tabs.at(i)->clear();
 	_mapView->clear();
@@ -1043,13 +1015,16 @@ void GUI::closeAll()
 	_fileActionGroup->setEnabled(false);
 	updateStatusBarInfo();
 	updateWindowTitle();
-	updateGraphTabs();
+	updateGraphs();
 	updateMapView();
 }
 
 void GUI::showGraphs(bool show)
 {
-	_graphTabWidget->setHidden(!show);
+	for (auto graphTab : _tabs)  {
+		auto dockWidget = _graphDockWidgets[graphTab];
+		dockWidget->setVisible(show && !graphTab->isEmpty());
+	}
 }
 
 void GUI::showToolbars(bool show)
@@ -1104,7 +1079,7 @@ void GUI::showTracks(bool show)
 		_tabs.at(i)->showTracks(show);
 
 	updateStatusBarInfo();
-	updateGraphTabs();
+	updateGraphs();
 }
 
 void GUI::showRoutes(bool show)
@@ -1115,7 +1090,7 @@ void GUI::showRoutes(bool show)
 		_tabs.at(i)->showRoutes(show);
 
 	updateStatusBarInfo();
-	updateGraphTabs();
+	updateGraphs();
 }
 
 void GUI::showGraphGrids(bool show)
@@ -1242,16 +1217,9 @@ void GUI::poiFileChecked(int index)
 
 void GUI::sliderPositionChanged(qreal pos)
 {
-	_sliderPos = pos;
-}
-
-void GUI::graphChanged(int index)
-{
-	if (index < 0)
-		return;
-
-	GraphTab *gt = static_cast<GraphTab*>(_graphTabWidget->widget(index));
-	gt->setSliderPosition(_sliderPos);
+	for (auto graphTab : _tabs) {
+		graphTab->setSliderPosition(pos);
+	}
 }
 
 void GUI::updateNavigationActions()
@@ -1273,33 +1241,9 @@ void GUI::updateNavigationActions()
 	}
 }
 
-void GUI::updateGraphTabs()
+void GUI::updateGraphs()
 {
-	int index;
-	GraphTab *tab;
-
-	for (int i = 0; i < _tabs.size(); i++) {
-		tab = _tabs.at(i);
-		if (tab->isEmpty() && (index = _graphTabWidget->indexOf(tab)) >= 0)
-			_graphTabWidget->removeTab(index);
-	}
-
-	for (int i = 0; i < _tabs.size(); i++) {
-		tab = _tabs.at(i);
-		if (!tab->isEmpty() && _graphTabWidget->indexOf(tab) < 0)
-			_graphTabWidget->insertTab(i, tab, _tabs.at(i)->label());
-	}
-
-	if (_graphTabWidget->count() &&
-	  ((_showTracksAction->isChecked() && _trackCount)
-	  || (_showRoutesAction->isChecked() && _routeCount))) {
-		if (_showGraphsAction->isChecked())
-			_graphTabWidget->setHidden(false);
-		_showGraphsAction->setEnabled(true);
-	} else {
-		_graphTabWidget->setHidden(true);
-		_showGraphsAction->setEnabled(false);
-	}
+	showGraphs(_showGraphsAction->isChecked());
 }
 
 void GUI::updateMapView()
@@ -1336,8 +1280,6 @@ void GUI::setCoordinatesFormat(CoordinatesFormat format)
 
 void GUI::setGraphType(GraphType type)
 {
-	_sliderPos = 0;
-
 	for (int i = 0; i <_tabs.count(); i++) {
 		_tabs.at(i)->setGraphType(type);
 		_tabs.at(i)->setSliderPosition(0);

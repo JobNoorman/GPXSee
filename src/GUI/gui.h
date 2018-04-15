@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QString>
 #include <QList>
+#include <QHash>
 #include <QDate>
 #include <QPrinter>
 #include "data/graph.h"
@@ -16,7 +17,7 @@
 
 class QMenu;
 class QToolBar;
-class QTabWidget;
+class QDockWidget;
 class QActionGroup;
 class QAction;
 class QLabel;
@@ -62,7 +63,6 @@ private slots:
 	void openOptions();
 
 	void mapChanged(int);
-	void graphChanged(int);
 	void poiFileChecked(int);
 
 	void next();
@@ -99,7 +99,8 @@ private:
 	void createToolBars();
 	void createStatusBar();
 	void createMapView();
-	void createGraphTabs();
+	void createGraphs();
+	void createGraph(GraphTab *gt);
 	void createBrowser();
 
 	bool openPOIFile(const QString &fileName);
@@ -109,7 +110,7 @@ private:
 	void updateStatusBarInfo();
 	void updateWindowTitle();
 	void updateNavigationActions();
-	void updateGraphTabs();
+	void updateGraphs();
 	void updateMapView();
 
 	TimeType timeType() const;
@@ -197,8 +198,8 @@ private:
 	QLabel *_timeLabel;
 
 	MapView *_mapView;
-	QTabWidget *_graphTabWidget;
 	QList<GraphTab*> _tabs;
+	QHash<GraphTab*, QDockWidget*> _graphDockWidgets;
 
 	POI *_poi;
 	MapList *_ml;
@@ -216,8 +217,6 @@ private:
 	qreal _movingTime;
 	DateRange _dateRange;
 	QString _pathName;
-
-	qreal _sliderPos;
 
 	int _frameStyle;
 	bool _showGraphs;
