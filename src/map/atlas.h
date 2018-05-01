@@ -18,6 +18,7 @@ public:
 	qreal resolution(const QRectF &rect) const;
 
 	int zoom() const {return _zoom;}
+	void setZoom(int zoom);
 	int zoomFit(const QSize &size, const RectC &br);
 	int zoomIn();
 	int zoomOut();
@@ -25,7 +26,7 @@ public:
 	QPointF ll2xy(const Coordinates &c);
 	Coordinates xy2ll(const QPointF &p);
 
-	void draw(QPainter *painter, const QRectF &rect);
+	void draw(QPainter *painter, const QRectF &rect, bool block);
 
 	void unload();
 
