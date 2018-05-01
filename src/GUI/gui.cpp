@@ -536,6 +536,12 @@ void GUI::createGraphs()
 	createGraph(new CadenceGraph);
 	createGraph(new PowerGraph);
 	createGraph(new TemperatureGraph);
+
+	auto dockWidgets = _graphDockWidgets.values();
+
+	for (int i = 0; i < dockWidgets.size() - 1; ++i) {
+		tabifyDockWidget(dockWidgets[i], dockWidgets[i + 1]);
+	}
 }
 
 void GUI::createGraph(GraphTab *graphTab)
@@ -546,7 +552,7 @@ void GUI::createGraph(GraphTab *graphTab)
 
 	auto dockWidget = new QDockWidget(graphTab->label(), this);
 	dockWidget->setWidget(graphTab);
-	addDockWidget(Qt::RightDockWidgetArea, dockWidget);
+	addDockWidget(Qt::BottomDockWidgetArea, dockWidget);
 	_graphDockWidgets[graphTab] = dockWidget;
 }
 
